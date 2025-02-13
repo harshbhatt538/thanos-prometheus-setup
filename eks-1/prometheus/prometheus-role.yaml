@@ -1,0 +1,11 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  # Use a name like "prometheus-cluster-role"
+  # If you want a namespace-scoped role, use "Role" instead of "ClusterRole"
+  name: prometheus-cluster-role
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "nodes"]
+    verbs: ["get", "list", "watch"]
+

@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: thanos-sidecar
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: thanos-sidecar
+  template:
+    metadata:
+      labels:
+        app: thanos-sidecar
+    spec:
+      containers:
+        - name: thanos-sidecar
+          image: quay.io/thanos/thanos:v0.32.2
+          args:
+            - "sidecar"
+            - "--prometheus.url=http://prometheus.monitoring.svc.cluster.local:9090"
+            - "--objstore.config-file=/etc/thanos/bucket-config.yml"
+          ports:
+            - containerPort: 10901
+          volumeMounts:
+            - name: thanos-config
+              mountPath: /etc/thanos
+            - name: thanos-bucket-config
+              mountPath: /etc/thanos/
+              
+      volumes:
+        - name: thanos-config
+          secret:
+            secretName: thanos-s3-secret
+        - name: thanos-bucket-config
+          configMap:
+            name: thanos-bucket-config
+

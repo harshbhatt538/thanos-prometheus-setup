@@ -1,0 +1,87 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: prometheus
+  namespace: monitoring
+spec:
+  serviceName: prometheus
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+    spec:
+      securityContext:
+        fsGroup: 1000  # Apply fsGroup at the pod level
+      containers:
+        - name: prometheus
+          image: prom/prometheus:v2.37.0
+          args:
+            - "--config.file=/etc/prometheus/prometheus.yml"
+            - "--storage.tsdb.path=/prometheus"
+            - "--web.enable-lifecycle"
+            - "--storage.tsdb.retention.time=6h"
+            - "--storage.tsdb.min-block-duration=36m"
+            - "--storage.tsdb.max-block-duration=36m"
+          ports:
+            - containerPort: 9090
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/prometheus
+            - name: prometheus-data
+              mountPath: /prometheus
+
+        - name: thanos-sidecar
+          image: quay.io/thanos/thanos:v0.32.2
+          args:
+            - "sidecar"
+            - "--prometheus.url=http://127.0.0.1:9090"
+            - "--objstore.config-file=/etc/thanos/bucket-config.yml"
+          ports:
+            - containerPort: 10901
+          env:
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: thanos-s3-secret
+                  key: access_key
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: thanos-s3-secret
+                  key: secret_key
+          volumeMounts:
+            - name: thanos-config
+              mountPath: /etc/thanos/bucket-config.yml
+              subPath: bucket-config.yml
+            - name: prometheus-data
+              mountPath: /prometheus
+
+      volumes:
+        - name: config-volume
+          configMap:
+            name: prometheus-config
+        - name: thanos-config
+          configMap:
+            name: thanos-bucket-config
+        - name: prometheus-data
+          persistentVolumeClaim:
+            claimName: prometheus-data-pvc
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: prometheus-data-pvc
+  namespace: monitoring
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi  # Adjust size based on your needs
+  storageClassName: gp2  # Automatically provision EBS with storage class "gp2"
+
